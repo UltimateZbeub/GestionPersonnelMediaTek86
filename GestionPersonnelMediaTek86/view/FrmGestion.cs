@@ -86,17 +86,34 @@ namespace GestionPersonnelMediaTek86.view
 
         private void BtnModifPersonnel_Click(object sender, EventArgs e)
         {
+            if (string.IsNullOrWhiteSpace(txtNom.Text) || string.IsNullOrWhiteSpace(txtTel.Text) || string.IsNullOrWhiteSpace(txtEmail.Text))
+            {
+                MessageBox.Show("Tous les champs doivent être remplis.", "Champs obligatoires", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             if (bdgPersonnels.Current is Personnel personnel)
             {
-                personnel.Name = txtNom.Text;
-                personnel.Phone = txtTel.Text;
-                personnel.Email = txtEmail.Text;
-                personnel.Service = (Service)cboService.SelectedItem;
+                DialogResult result = MessageBox.Show(
+                    "Voulez-vous enregistrer les modifications apportées à ce personnel ?",
+                    "Confirmation",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question
+                );
 
-                controller.UpdatePersonnel(personnel);
-                RefreshPersonnelList();
+                if (result == DialogResult.Yes)
+                {
+                    personnel.Name = txtNom.Text;
+                    personnel.Phone = txtTel.Text;
+                    personnel.Email = txtEmail.Text;
+                    personnel.Service = (Service)cboService.SelectedItem;
+
+                    controller.UpdatePersonnel(personnel);
+                    RefreshPersonnelList();
+                }
             }
         }
+
 
         private void BtnSupprPersonnel_Click(object sender, EventArgs e)
         {
@@ -114,7 +131,33 @@ namespace GestionPersonnelMediaTek86.view
         {
             if (bdgPersonnels.Current is Personnel personnel)
             {
-                var absence = new Absence(0, personnel.Id, dtpDebut.Value.Date, dtpFin.Value.Date, (Motif)cboMotif.SelectedItem);
+                DateTime debut = dtpDebut.Value.Date;
+                DateTime fin = dtpFin.Value.Date;
+
+                if (fin < debut)
+                {
+                    MessageBox.Show("La date de fin ne peut pas être antérieure à la date de début.", "Erreur de date", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                List<Absence> absencesExistantes = controller.GetAbsences(personnel.Id, motifs);
+                foreach (Absence abs in absencesExistantes)
+                {
+                    bool chevauche = debut <= abs.DateFin && fin >= abs.DateDebut;
+                    if (chevauche)
+                    {
+                        MessageBox.Show("Ce personnel a déjà une absence pendant cette période.", "Conflit d'absences", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
+
+                var absence = new Absence(
+                    0,
+                    personnel.Id,
+                    debut,
+                    fin,
+                    (Motif)cboMotif.SelectedItem
+                );
                 controller.AddAbsence(absence);
                 RefreshAbsenceList();
             }
@@ -122,14 +165,50 @@ namespace GestionPersonnelMediaTek86.view
 
         private void BtnModifAbsence_Click(object sender, EventArgs e)
         {
-            if (bdgAbsences.Current is Absence absence)
+            if (bdgAbsences.Current is Absence selectedAbsence && bdgPersonnels.Current is Personnel personnel)
             {
-                absence.DateDebut = dtpDebut.Value.Date;
-                absence.DateFin = dtpFin.Value.Date;
-                absence.Motif = (Motif)cboMotif.SelectedItem;
+                DateTime debut = dtpDebut.Value.Date;
+                DateTime fin = dtpFin.Value.Date;
 
-                controller.UpdateAbsence(absence);
-                RefreshAbsenceList();
+                if (fin < debut)
+                {
+                    MessageBox.Show("La date de fin ne peut pas être antérieure à la date de début.", "Erreur de date", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // Récupère toutes les absences de ce personnel (sauf celle qu'on modifie)
+                List<Absence> absencesExistantes = controller.GetAbsences(personnel.Id, motifs);
+                foreach (Absence abs in absencesExistantes)
+                {
+                    if (abs.Id != selectedAbsence.Id)
+                    {
+                        // Vérifie les chevauchements
+                        bool chevauche = debut <= abs.DateFin && fin >= abs.DateDebut;
+                        if (chevauche)
+                        {
+                            MessageBox.Show("Ce personnel a déjà une absence pendant cette période.", "Conflit d'absences", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                    }
+                }
+
+                // Confirmation utilisateur
+                DialogResult result = MessageBox.Show(
+                    "Voulez-vous enregistrer les modifications de cette absence ?",
+                    "Confirmation",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question
+                );
+
+                if (result == DialogResult.Yes)
+                {
+                    selectedAbsence.DateDebut = debut;
+                    selectedAbsence.DateFin = fin;
+                    selectedAbsence.Motif = (Motif)cboMotif.SelectedItem;
+
+                    controller.UpdateAbsence(selectedAbsence);
+                    RefreshAbsenceList();
+                }
             }
         }
 
